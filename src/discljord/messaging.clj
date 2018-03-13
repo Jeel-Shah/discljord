@@ -2,6 +2,10 @@
   (:require [discljord.bots :as bots]
             [discljord.connections :as conn]
             [org.httpkit.client :as http]
+            [clojure.core.async :as a
+             :refer [>! <! >!! <!! go chan buffer close! thread
+                     alts! alts!! timeout]
+             ]
             [clojure.data.json :as json])
   (:use com.rpl.specter))
 
@@ -39,12 +43,22 @@
 ;; then it will update the rate limit for that endpoint and place the request back at the front
 ;; of the queue
 
+
+
+(def server-channel (chan))
+
+(defn process-messages [callback channel]
+  (let [rate-limited? false]
+    (go (while (not rate-limited?) ((<! channel))))
+    (go (>! channel callback))))
+
 (defn send-message
   [bot channel-id content]
-  (http/post (conn/api-url (str "/channels/" channel-id "/messages"))
-             {:headers {"Authorization" (:token bot)
-                        "Content-Type" "application/json"}
-              :body (json/write-str {:content (str \u180E content)})}))
+  (process-messages (fn [] (http/post (conn/api-url (str "/channels/" channel-id "/messages"))
+                                      {:headers {"Authorization" (:token bot)
+                                                 "Content-Type" "application/json"}
+                                       :body (json/write-str {:content (str \u180E content)})}))
+                    server-channel))
 
 (defn get-channel
   [bot channel-id]
@@ -58,3 +72,17 @@
   (http/delete (conn/api-url (str "/channels/" channel-id "/messages/" message-id))
                {:headers {"Authorization" (:token bot)
                           "Content-Type" "application/json"}}))
+
+
+(defn get-reactions
+  [bot channel-id message-id emoji]
+  (http/get (conn/api-url (str "/channels/" channel-id "/messages/" message-id "/reactions/" emoji))
+            {:headers {"Authorization" (:token bot)
+                       "Content-Type" "application/json"}}))
+
+(defn create-reaction
+  [bot channel-id message-id emoji]
+  (http/put (conn/api-url (str "/channels/" channel-id "/messages/"
+                              message-id "/reactions/" emoji "/@me"))
+            {:headers {"Authorization" (:token bot)
+                       "Content-Type" "application/json"}}))
