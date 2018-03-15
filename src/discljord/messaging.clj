@@ -44,13 +44,15 @@
 ;; of the queue
 
 
+;; TODO: add logic for parsing and processing rate limits
+;; For every request made there are optional HTTP response headers containing the rate limit
 
 (def server-channel (chan))
 
 (defn process-messages [callback channel]
   (let [rate-limited? false]
     (go (while (not rate-limited?) ((<! channel))))
-    (go (>! channel callback))))
+    (go (>! channel  callback))))
 
 (defn send-message
   [bot channel-id content]
